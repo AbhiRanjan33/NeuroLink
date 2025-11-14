@@ -21,10 +21,25 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.abhi_ranjan.NeuroLinkApp"
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "@react-native-voice/voice",
+        {
+          "microphonePermission": "Allow NeuroLink to access your microphone to record voice notes for your journal",
+          "speechRecognitionPermission": "Allow NeuroLink to recognize your speech and convert it to text"
+        }
+      ]
+    ]
   }
 }
