@@ -16,7 +16,12 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
 import { Ionicons } from '@expo/vector-icons';
 import Journal from './components/Journal';
-import { API_URL } from './src/config';
+import Dojo from './components/Dojo';
+import QuizGame from './components/games/QuizGame';
+import MeditationRoom from './components/games/MeditationRoom';
+import MemoryGame from './components/games/MemoryGame';
+import ShareLocationButton from './components/ShareLocationButton';
+const API_URL = 'http://172.16.196.91:5000'; 
 
 interface User {
   name: string;
@@ -27,7 +32,7 @@ interface User {
 }
 
 export default function App() {
-  const [screen, setScreen] = useState<'landing' | 'auth' | 'profile' | 'dashboard' | 'chatbot'>('landing');
+  const [screen, setScreen] = useState<'landing' | 'auth' | 'profile' | 'dashboard' | 'chatbot' | 'dojo' | 'quiz' | 'meditation' | 'memoryGame'>('landing');
   const [fingerprintId, setFingerprintId] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [name, setName] = useState('');
@@ -263,7 +268,7 @@ export default function App() {
       return (
         <View style={styles.container}>
           <StatusBar barStyle="dark-content" />
-          <TouchableOpacity style={styles.backButton} onPress={() => setShowJournal(false)}>
+          <TouchableOpacity style={[styles.backButton, { marginTop: 20 }]} onPress={() => setShowJournal(false)}>
             <Ionicons name="arrow-back" size={24} color="#6B5E4C" />
             <Text style={styles.backButtonText}>Back to Home</Text>
           </TouchableOpacity>
@@ -282,13 +287,13 @@ export default function App() {
     return (
       <View style={styles.dashboardContainer}>
         <StatusBar barStyle="dark-content" />
-        {/* Header */}
-        <View style={styles.header}>
+         {/* Header */}
+         <View style={styles.header}>
           <TouchableOpacity onPress={() => setIsDrawerOpen(true)}>
             <Ionicons name="menu" size={28} color="#6B5E4C" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Mindbloom</Text>
-          <View style={{ width: 28 }} />
+          <Text style={styles.headerTitle}>NeuroLink</Text>
+          {user && <ShareLocationButton userId={user.userId} />}
         </View>
 
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -313,7 +318,7 @@ export default function App() {
           {/* Grid Cards */}
           <View style={styles.gridContainer}>
             <DashboardCard icon="book-outline" title="Journal Page" onPress={() => setShowJournal(true)} />
-            <DashboardCard icon="sunny-outline" title="Dojo Page" onPress={() => Alert.alert('Dojo Page', 'Coming soon!')} />
+            <DashboardCard icon="sunny-outline" title="Dojo Page" onPress={() => setScreen('dojo')} />
             <DashboardCard icon="notifications-outline" title="Reminders Page" onPress={() => Alert.alert('Reminders', 'Coming soon!')} />
             <DashboardCard icon="people-outline" title="Info from the Family" onPress={() => Alert.alert('Family Info', 'Coming soon!')} />
           </View>
@@ -479,6 +484,32 @@ export default function App() {
         <Text style={{ color: '#6B5E4C', marginBottom: 12 }}>Coming soon</Text>
       </View>
     );
+  }
+
+  // DOJO
+  if (screen === 'dojo') {
+    return (
+      <Dojo
+        onBack={() => setScreen('dashboard')}
+        onOpenQuiz={() => setScreen('quiz')}
+        onOpenMeditation={() => setScreen('meditation')}
+        onOpenMemoryGame={() => setScreen('memoryGame')}
+      />
+    );
+  }
+
+  if (screen === 'quiz') {
+    return <QuizGame onBack={() => setScreen('dojo')} journals={user?.journals || []} userId={user!.userId} />;
+  }
+
+  // MEDITATION
+  if (screen === 'meditation') {
+    return <MeditationRoom onBack={() => setScreen('dojo')} userId={user!.userId} />;
+  }
+
+  // MEMORY GAME (blank room)
+  if (screen === 'memoryGame') {
+    return <MemoryGame onBack={() => setScreen('dashboard')} />;
   }
 
   return null;

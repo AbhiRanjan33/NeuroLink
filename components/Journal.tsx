@@ -19,7 +19,7 @@ import { Video, ResizeMode, Audio } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import { Ionicons } from '@expo/vector-icons';
-import { API_URL } from '../src/config';
+const API_URL = 'http://172.16.196.91:5000'; 
 
 const CLOUDINARY_URL = 'https://api.cloudinary.com/v1_1/drqhllyex/upload';
 const ASSEMBLYAI_API_KEY = '0b720f5b3a994bba9608e74b657aa750';

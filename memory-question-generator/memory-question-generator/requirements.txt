@@ -1,0 +1,6 @@
+Flask==3.0.2
+google-generativeai==0.4.1
+python-dotenv==1.0.1
+spacy==3.7.2
+requests==2.31.0
+pymongo==4.8.0

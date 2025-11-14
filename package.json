@@ -15,6 +15,7 @@
     "buffer": "^6.0.3",
     "expo": "~54.0.23",
     "expo-av": "~16.0.7",
+    "expo-location": "~17.0.1",
     "expo-file-system": "~19.0.17",
     "expo-image-picker": "~17.0.8",
     "expo-local-authentication": "~17.0.7",
