@@ -187,7 +187,8 @@ Return ONLY valid JSON:
       "tag": "easy" | "hard",
       "question": "",
       "options": ["", "", "", ""],
-      "correct": ""
+      "correct": "",
+      "explanation": "A short, gentle sentence that describes what actually happened, grounded strictly in RAW TEXT."
     }}
   ]
 }}

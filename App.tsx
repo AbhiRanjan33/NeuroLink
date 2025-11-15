@@ -20,8 +20,17 @@ import Dojo from './components/Dojo';
 import QuizGame from './components/games/QuizGame';
 import MeditationRoom from './components/games/MeditationRoom';
 import MemoryGame from './components/games/MemoryGame';
+import Flashcards from './components/Flashcards';
+import Reminders from './components/Reminders';
+import Chatbot from './components/Chatbot';
+import FaceRecognition from './components/FaceRecognition';
 import ShareLocationButton from './components/ShareLocationButton';
-const API_URL = 'http://172.16.196.91:5000'; 
+import SOS from './components/SOS';
+import GeoLocation from './components/GeoLocation';
+import FamilyInfo from './components/FamilyInfo';
+import * as Notifications from 'expo-notifications';
+import { Audio } from 'expo-av';
+const API_URL = 'http://172.16.197.52:5000'; 
 
 interface User {
   name: string;
@@ -32,7 +41,7 @@ interface User {
 }
 
 export default function App() {
-  const [screen, setScreen] = useState<'landing' | 'auth' | 'profile' | 'dashboard' | 'chatbot' | 'dojo' | 'quiz' | 'meditation' | 'memoryGame'>('landing');
+  const [screen, setScreen] = useState<'landing' | 'auth' | 'profile' | 'dashboard' | 'chatbot' | 'dojo' | 'quiz' | 'meditation' | 'memoryGame' | 'flashcards' | 'reminders' | 'face' | 'sos' | 'geolocation' | 'familyinfo'>('landing');
   const [fingerprintId, setFingerprintId] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [name, setName] = useState('');
@@ -41,6 +50,14 @@ export default function App() {
   const [statusMsg, setStatusMsg] = useState('');
   const [showJournal, setShowJournal] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  // Chat state for drawer integration
+  const [chatList, setChatList] = useState<Array<{ chatId: string; title: string; createdAt: string }>>([]);
+  const [chatExpanded, setChatExpanded] = useState(false);
+  const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  
+  // Audio management for Dojo rooms - store both audio files
+  const dojoAudioRef1 = useRef<Audio.Sound | null>(null);
+  const dojoAudioRef2 = useRef<Audio.Sound | null>(null);
   
   // Animated value for drawer
   const drawerTranslateX = useRef(new Animated.Value(-280)).current;
@@ -77,6 +94,120 @@ export default function App() {
       ]).start();
     }
   }, [isDrawerOpen]);
+
+  // Load chat list when drawer opens
+  useEffect(() => {
+    (async () => {
+      if (isDrawerOpen && user?.userId) {
+        try {
+          const r = await fetch(`${API_URL}/chat/list?userId=${encodeURIComponent(user.userId)}`);
+          const j = await r.json();
+          if (j?.success && Array.isArray(j.chats)) {
+            setChatList(j.chats.map((c: any) => ({ chatId: c.chatId, title: c.title || 'New Chat', createdAt: c.createdAt })));
+          }
+        } catch {}
+      }
+    })();
+  }, [isDrawerOpen, user?.userId]);
+
+  // Load Dojo audio files
+  useEffect(() => {
+    loadDojoAudio();
+    return () => {
+      unloadDojoAudio();
+    };
+  }, []);
+
+  const loadDojoAudio = async () => {
+    try {
+      // Load first audio file (123.mp3)
+      const audioUri1 = require('./123.mp3');
+      const { sound: sound1 } = await Audio.Sound.createAsync(
+        audioUri1,
+        { shouldPlay: false, isLooping: true }
+      );
+      dojoAudioRef1.current = sound1;
+    } catch (error) {
+      console.error('Failed to load Dojo audio 1 (123.mp3):', error);
+    }
+
+    try {
+      // Load second audio file (234.mp3)
+      const audioUri2 = require('./234.mp3');
+      const { sound: sound2 } = await Audio.Sound.createAsync(
+        audioUri2,
+        { shouldPlay: false, isLooping: true }
+      );
+      dojoAudioRef2.current = sound2;
+    } catch (error) {
+      console.error('Failed to load Dojo audio 2 (234.mp3):', error);
+    }
+  };
+
+  const unloadDojoAudio = async () => {
+    try {
+      if (dojoAudioRef1.current) {
+        await dojoAudioRef1.current.unloadAsync();
+        dojoAudioRef1.current = null;
+      }
+      if (dojoAudioRef2.current) {
+        await dojoAudioRef2.current.unloadAsync();
+        dojoAudioRef2.current = null;
+      }
+    } catch (error) {
+      console.error('Failed to unload Dojo audio:', error);
+    }
+  };
+
+  // Track which audio is currently playing
+  const currentPlayingAudioRef = useRef<Audio.Sound | null>(null);
+
+  const playDojoAudio = async () => {
+    try {
+      // Stop any currently playing audio first
+      if (currentPlayingAudioRef.current) {
+        try {
+          await currentPlayingAudioRef.current.stopAsync();
+        } catch (e) {
+          // Ignore errors if already stopped
+        }
+      }
+
+      // Randomly select one of the two audio files
+      const randomChoice = Math.random() < 0.5;
+      let selectedAudio: Audio.Sound | null = null;
+
+      if (randomChoice && dojoAudioRef1.current) {
+        selectedAudio = dojoAudioRef1.current;
+      } else if (!randomChoice && dojoAudioRef2.current) {
+        selectedAudio = dojoAudioRef2.current;
+      } else {
+        // Fallback to whichever is available
+        selectedAudio = dojoAudioRef1.current || dojoAudioRef2.current;
+      }
+
+      if (selectedAudio) {
+        currentPlayingAudioRef.current = selectedAudio;
+        await selectedAudio.playAsync();
+      }
+    } catch (error) {
+      console.error('Failed to play Dojo audio:', error);
+    }
+  };
+
+  const stopDojoAudio = async () => {
+    try {
+      if (currentPlayingAudioRef.current) {
+        await currentPlayingAudioRef.current.stopAsync();
+        currentPlayingAudioRef.current = null;
+      }
+    } catch (error) {
+      console.error('Failed to stop Dojo audio:', error);
+    }
+  };
+
+    // Register background reminder caller (runs even when app is closed)
+    
 
   /* --------------------------------------------------------------- */
   /*  GET OR CREATE PERSISTENT FINGERPRINT ID                         */
@@ -302,13 +433,13 @@ export default function App() {
 
           {/* Top Row - Flashcard and Suggestion */}
           <View style={styles.topRow}>
-            <View style={styles.flashcardCard}>
+            <TouchableOpacity style={styles.flashcardCard} activeOpacity={0.8} onPress={() => setScreen('flashcards')}>
               <Text style={styles.flashcardLabel}>Flashcard</Text>
               <View style={styles.flashcardContent}>
                 <Text style={styles.flashcardTitle}>Gratitude</Text>
                 <Ionicons name="leaf-outline" size={24} color="#6B5E4C" />
               </View>
-            </View>
+            </TouchableOpacity>
             <View style={styles.suggestionCard}>
               <Text style={styles.suggestionTitle}>Suggestion</Text>
               <Text style={styles.suggestionText}>Meditate for 5 min today</Text>
@@ -319,8 +450,10 @@ export default function App() {
           <View style={styles.gridContainer}>
             <DashboardCard icon="book-outline" title="Journal Page" onPress={() => setShowJournal(true)} />
             <DashboardCard icon="sunny-outline" title="Dojo Page" onPress={() => setScreen('dojo')} />
-            <DashboardCard icon="notifications-outline" title="Reminders Page" onPress={() => Alert.alert('Reminders', 'Coming soon!')} />
-            <DashboardCard icon="people-outline" title="Info from the Family" onPress={() => Alert.alert('Family Info', 'Coming soon!')} />
+            <DashboardCard icon="notifications-outline" title="Reminders Page" onPress={() => setScreen('reminders')} />
+            <DashboardCard icon="person-outline" title="Face Recognition" onPress={() => setScreen('face')} />
+            <DashboardCard icon="location-outline" title="Geo Location" onPress={() => setScreen('geolocation')} />
+            <DashboardCard icon="people-outline" title="Info from the Family" onPress={() => setScreen('familyinfo')} />
           </View>
 
         </ScrollView>
@@ -390,11 +523,72 @@ export default function App() {
                     <Ionicons name="chevron-forward" size={20} color="#999" />
                   </TouchableOpacity>
 
+                  {/* Expandable Chat History */}
+                  <TouchableOpacity
+                    style={[styles.drawerItem, { justifyContent: 'space-between' }]}
+                    onPress={() => setChatExpanded((s) => !s)}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <View style={styles.drawerItemIconContainer}>
+                        <Ionicons name="albums-outline" size={22} color="#6B5E4C" />
+                      </View>
+                      <Text style={styles.drawerItemText}>Chat History</Text>
+                    </View>
+                    <Ionicons name={chatExpanded ? 'chevron-up' : 'chevron-down'} size={20} color="#999" />
+                  </TouchableOpacity>
+
+                  {chatExpanded && (
+                    <View style={{ marginLeft: 16, marginBottom: 8 }}>
+                      <TouchableOpacity
+                        style={[styles.drawerItem, { marginBottom: 6 }]}
+                        onPress={async () => {
+                          try {
+                            const r = await fetch(`${API_URL}/chat/new`, {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ userId: user!.userId }),
+                            });
+                            const j = await r.json();
+                            if (j?.success && j.chatId) {
+                              setActiveChatId(j.chatId);
+                              setScreen('chatbot');
+                              setIsDrawerOpen(false);
+                              setChatList(j.chats || []);
+                            }
+                          } catch {}
+                        }}
+                      >
+                        <View style={styles.drawerItemIconContainer}>
+                          <Ionicons name="add-circle-outline" size={22} color="#6B5E4C" />
+                        </View>
+                        <Text style={styles.drawerItemText}>New Chat</Text>
+                        <Ionicons name="chevron-forward" size={20} color="#999" />
+                      </TouchableOpacity>
+                      {chatList.map((c) => (
+                        <TouchableOpacity
+                          key={c.chatId}
+                          style={[styles.drawerItem, { marginBottom: 6 }]}
+                          onPress={() => {
+                            setActiveChatId(c.chatId);
+                            setScreen('chatbot');
+                            setIsDrawerOpen(false);
+                          }}
+                        >
+                          <View style={styles.drawerItemIconContainer}>
+                            <Ionicons name="chatbox-ellipses-outline" size={20} color="#6B5E4C" />
+                          </View>
+                          <Text style={styles.drawerItemText} numberOfLines={1}>{c.title || 'Chat'}</Text>
+                          <Ionicons name="chevron-forward" size={20} color="#999" />
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+
                   <TouchableOpacity
                     style={styles.drawerItem}
                     onPress={() => {
                       setIsDrawerOpen(false);
-                      Alert.alert('Reminders', 'Coming soon!');
+                      setScreen('reminders');
                     }}
                   >
                     <View style={styles.drawerItemIconContainer}>
@@ -402,6 +596,48 @@ export default function App() {
                     </View>
                     <Text style={styles.drawerItemText}>Reminders</Text>
                     <Ionicons name="chevron-forward" size={20} color="#999" />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.drawerItem}
+                    onPress={() => {
+                      setIsDrawerOpen(false);
+                      setScreen('face');
+                    }}
+                  >
+                    <View style={styles.drawerItemIconContainer}>
+                      <Ionicons name="person-outline" size={24} color="#6B5E4C" />
+                    </View>
+                    <Text style={styles.drawerItemText}>Face Recognition</Text>
+                    <Ionicons name="chevron-forward" size={20} color="#999" />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.drawerItem}
+                    onPress={() => {
+                      setIsDrawerOpen(false);
+                      setScreen('geolocation');
+                    }}
+                  >
+                    <View style={styles.drawerItemIconContainer}>
+                      <Ionicons name="location-outline" size={24} color="#6B5E4C" />
+                    </View>
+                    <Text style={styles.drawerItemText}>Geo Location</Text>
+                    <Ionicons name="chevron-forward" size={20} color="#999" />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.drawerItem, styles.drawerSOSItem]}
+                    onPress={() => {
+                      setIsDrawerOpen(false);
+                      setScreen('sos');
+                    }}
+                  >
+                    <View style={[styles.drawerItemIconContainer, styles.sosIconContainer]}>
+                      <Ionicons name="warning" size={24} color="#DC3545" />
+                    </View>
+                    <Text style={[styles.drawerItemText, styles.sosText]}>Emergency SOS</Text>
+                    <Ionicons name="chevron-forward" size={20} color="#DC3545" />
                   </TouchableOpacity>
 
                   <Text style={[styles.drawerSectionTitle, { marginTop: 24 }]}>Settings</Text>
@@ -447,8 +683,8 @@ export default function App() {
                     <Text style={[styles.drawerItemText, styles.logoutText]}>Logout</Text>
                     <Ionicons name="chevron-forward" size={20} color="#DC3545" />
                   </TouchableOpacity>
-                </View>
-              </ScrollView>
+        </View>
+      </ScrollView>
             </Animated.View>
             
             <TouchableOpacity
@@ -473,17 +709,7 @@ export default function App() {
 
   // CHATBOT
   if (screen === 'chatbot') {
-    return (
-      <View style={styles.container}>
-        <StatusBar barStyle="dark-content" />
-        <TouchableOpacity style={styles.backButton} onPress={() => setScreen('dashboard')}>
-          <Ionicons name="arrow-back" size={24} color="#6B5E4C" />
-          <Text style={styles.backButtonText}>Back to Home</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>Chatbot</Text>
-        <Text style={{ color: '#6B5E4C', marginBottom: 12 }}>Coming soon</Text>
-      </View>
-    );
+    return <Chatbot onBack={() => setScreen('dashboard')} userId={user!.userId} chatId={activeChatId} onNewChatAssigned={(id) => setActiveChatId(id)} userName={user?.name || null} />;
   }
 
   // DOJO
@@ -491,25 +717,88 @@ export default function App() {
     return (
       <Dojo
         onBack={() => setScreen('dashboard')}
-        onOpenQuiz={() => setScreen('quiz')}
-        onOpenMeditation={() => setScreen('meditation')}
-        onOpenMemoryGame={() => setScreen('memoryGame')}
+        onOpenQuiz={async () => {
+          await playDojoAudio();
+          setScreen('quiz');
+        }}
+        onOpenMeditation={async () => {
+          await playDojoAudio();
+          setScreen('meditation');
+        }}
+        onOpenMemoryGame={async () => {
+          await playDojoAudio();
+          setScreen('memoryGame');
+        }}
       />
     );
   }
 
   if (screen === 'quiz') {
-    return <QuizGame onBack={() => setScreen('dojo')} journals={user?.journals || []} userId={user!.userId} />;
+    return (
+      <QuizGame 
+        onBack={async () => {
+          await stopDojoAudio();
+          setScreen('dojo');
+        }} 
+        journals={user?.journals || []} 
+        userId={user!.userId} 
+      />
+    );
   }
 
   // MEDITATION
   if (screen === 'meditation') {
-    return <MeditationRoom onBack={() => setScreen('dojo')} userId={user!.userId} />;
+    return (
+      <MeditationRoom 
+        onBack={async () => {
+          await stopDojoAudio();
+          setScreen('dojo');
+        }} 
+        userId={user!.userId} 
+      />
+    );
   }
 
   // MEMORY GAME (blank room)
   if (screen === 'memoryGame') {
-    return <MemoryGame onBack={() => setScreen('dashboard')} />;
+    return (
+      <MemoryGame 
+        onBack={async () => {
+          await stopDojoAudio();
+          setScreen('dojo');
+        }} 
+      />
+    );
+  }
+
+  // FLASHCARDS
+  if (screen === 'flashcards') {
+    return <Flashcards onBack={() => setScreen('dashboard')} />;
+  }
+
+  // REMINDERS
+  if (screen === 'reminders') {
+    return <Reminders onBack={() => setScreen('dashboard')} userId={user!.userId} />;
+}
+
+  // FACE
+  if (screen === 'face') {
+    return <FaceRecognition onBack={() => setScreen('dashboard')} userId={user!.userId} />;
+  }
+
+  // SOS
+  if (screen === 'sos') {
+    return <SOS onBack={() => setScreen('dashboard')} userId={user!.userId} userName={user?.name || null} />;
+  }
+
+  // GEO LOCATION
+  if (screen === 'geolocation') {
+    return <GeoLocation onBack={() => setScreen('dashboard')} userId={user!.userId} />;
+  }
+
+  // FAMILY INFO
+  if (screen === 'familyinfo') {
+    return <FamilyInfo onBack={() => setScreen('dashboard')} userId={user!.userId} />;
   }
 
   return null;
@@ -845,5 +1134,16 @@ const styles = StyleSheet.create({
   },
   logoutText: {
     color: '#DC3545',
+  },
+  drawerSOSItem: {
+    marginTop: 8,
+    backgroundColor: '#FFF5F5',
+  },
+  sosIconContainer: {
+    backgroundColor: '#FFE5E8',
+  },
+  sosText: {
+    color: '#DC3545',
+    fontWeight: '600',
   },
 });

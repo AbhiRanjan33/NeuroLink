@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView, Easing, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-const API_URL = 'http://172.16.196.91:5000'; 
+const API_URL = 'http://172.16.197.52:5000'; 
 
 interface MeditationRoomProps {
   onBack: () => void;
@@ -175,117 +175,125 @@ export default function MeditationRoom({ onBack, userId }: MeditationRoomProps) 
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <Ionicons name="arrow-back" size={24} color="#6B5E4C" />
-          <Text style={styles.backButtonText}>Back to Dojo</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>Meditation Room</Text>
-      </View>
-
-      {/* Main Visualizer Card */}
-      <View style={styles.visualizerCard}>
-        <View style={styles.loaderWrapper}>
-          {/* Outer expanding pulse */}
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.pulseRing,
-              {
-                transform: [
-                  {
-                    scale: pulseAnim.interpolate({
-                      inputRange: [0, 0.7, 1],
-                      outputRange: [1, 1.6, 1.8],
-                    }),
-                  },
-                ],
-                opacity: pulseAnim.interpolate({
-                  inputRange: [0, 0.7, 1],
-                  outputRange: [0.7, 0.1, 0],
-                }),
-              },
-            ]}
-          />
-          {/* Core blob */}
-          <Animated.View
-            style={[
-              styles.pulseCore,
-              {
-                transform: [
-                  {
-                    scale: pulseAnim.interpolate({
-                      inputRange: [0, 0.7, 1],
-                      outputRange: [0.95, 1.2, 0.95],
-                    }),
-                  },
-                ],
-              },
-            ]}
-          />
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={onBack}>
+            <Ionicons name="arrow-back" size={24} color="#6B5E4C" />
+            <Text style={styles.backButtonText}>Back to Dojo</Text>
+          </TouchableOpacity>
+          <Text style={styles.title}>Meditation Room</Text>
         </View>
-        <Text style={styles.circleText}>{isRunning ? breathingPhase : 'Begin'}</Text>
-      </View>
 
-      {/* Timer and Controls Card */}
-      <View style={styles.controlsCard}>
-        <Text style={styles.timerText}>{formattedMinutes}:{formattedSeconds}</Text>
-        
-        <View style={styles.buttonContainer}>
+        {/* Main Visualizer Card */}
+        <View style={styles.visualizerCard}>
+          <View style={styles.loaderWrapper}>
+            {/* Outer expanding pulse */}
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.pulseRing,
+                {
+                  transform: [
+                    {
+                      scale: pulseAnim.interpolate({
+                        inputRange: [0, 0.7, 1],
+                        outputRange: [1, 1.6, 1.8],
+                      }),
+                    },
+                  ],
+                  opacity: pulseAnim.interpolate({
+                    inputRange: [0, 0.7, 1],
+                    outputRange: [0.7, 0.1, 0],
+                  }),
+                },
+              ]}
+            />
+            {/* Core blob */}
+            <Animated.View
+              style={[
+                styles.pulseCore,
+                {
+                  transform: [
+                    {
+                      scale: pulseAnim.interpolate({
+                        inputRange: [0, 0.7, 1],
+                        outputRange: [0.95, 1.2, 0.95],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            />
+          </View>
+          <View style={styles.breathingTextContainer}>
+            <Text style={styles.circleText}>{isRunning ? breathingPhase : 'Begin'}</Text>
+          </View>
+        </View>
+
+        {/* Timer and Controls Card */}
+        <View style={styles.controlsCard}>
+          <Text style={styles.timerText}>{formattedMinutes}:{formattedSeconds}</Text>
+          
+          <View style={styles.buttonContainer}>
+            <TouchableOpacity
+              style={[styles.primaryButton, isRunning && styles.runningButton]}
+              onPress={toggleTimer}
+              activeOpacity={0.8}
+            >
+              <Ionicons name={isRunning ? "pause" : "play"} size={22} color="#FFFFFF" />
+              <Text style={styles.primaryButtonText}>{isRunning ? 'Pause' : 'Start'}</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={resetTimer}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="refresh" size={22} color="#6B5E4C" />
+              <Text style={styles.secondaryButtonText}>Reset</Text>
+            </TouchableOpacity>
+          </View>
+
           <TouchableOpacity
-            style={[styles.primaryButton, isRunning && styles.runningButton]}
-            onPress={toggleTimer}
+            style={[styles.saveButton, (seconds === 0 || saving) && styles.saveButtonDisabled]}
+            onPress={saveSession}
+            disabled={seconds === 0 || saving}
             activeOpacity={0.8}
           >
-            <Ionicons name={isRunning ? "pause" : "play"} size={22} color="#FFFFFF" />
-            <Text style={styles.primaryButtonText}>{isRunning ? 'Pause' : 'Start'}</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={resetTimer}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="refresh" size={22} color="#6B5E4C" />
-            <Text style={styles.secondaryButtonText}>Reset</Text>
+            <Ionicons name="save-outline" size={20} color="#FFFFFF" />
+            <Text style={styles.saveButtonText}>{saving ? 'Saving…' : 'End & Save Session'}</Text>
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity
-          style={[styles.saveButton, (seconds === 0 || saving) && styles.saveButtonDisabled]}
-          onPress={saveSession}
-          disabled={seconds === 0 || saving}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="save-outline" size={20} color="#FFFFFF" />
-          <Text style={styles.saveButtonText}>{saving ? 'Saving…' : 'End & Save Session'}</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* History */}
-      <View style={styles.historyCard}>
-        <Text style={styles.historyTitle}>Past Sessions</Text>
-        {history.length === 0 ? (
-          <Text style={styles.historyEmpty}>No sessions yet. Start a session to log it.</Text>
-        ) : (
-          <ScrollView style={styles.historyList} showsVerticalScrollIndicator={false}>
-            {history.map((s, i) => {
-              const d = new Date(s.startedAt);
-              const mins = Math.floor(s.durationSeconds / 60);
-              const secs = s.durationSeconds % 60;
-              return (
-                <View key={i} style={styles.historyItem}>
-                  <Ionicons name="leaf-outline" size={18} color="#6B5E4C" />
-                  <Text style={styles.historyText}>
-                    {d.toLocaleString()} • {mins.toString().padStart(2,'0')}:{secs.toString().padStart(2,'0')}
-                  </Text>
-                </View>
-              );
-            })}
-          </ScrollView>
-        )}
-      </View>
+        {/* History */}
+        <View style={styles.historyCard}>
+          <Text style={styles.historyTitle}>Past Sessions</Text>
+          {history.length === 0 ? (
+            <Text style={styles.historyEmpty}>No sessions yet. Start a session to log it.</Text>
+          ) : (
+            <ScrollView style={styles.historyList} showsVerticalScrollIndicator={false}>
+              {history.map((s, i) => {
+                const d = new Date(s.startedAt);
+                const mins = Math.floor(s.durationSeconds / 60);
+                const secs = s.durationSeconds % 60;
+                return (
+                  <View key={i} style={styles.historyItem}>
+                    <Ionicons name="leaf-outline" size={18} color="#6B5E4C" />
+                    <Text style={styles.historyText}>
+                      {d.toLocaleString()} • {mins.toString().padStart(2,'0')}:{secs.toString().padStart(2,'0')}
+                    </Text>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          )}
+        </View>
+      </ScrollView>
     </View>
   );
 }
@@ -295,7 +303,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F5F1E8',
-    justifyContent: 'space-between',
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 24,
   },
   header: {
     paddingTop: 50,
@@ -320,11 +331,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   visualizerCard: {
-    flex: 1,
+    minHeight: 320,
     alignItems: 'center',
     justifyContent: 'center',
     marginHorizontal: 20,
     marginBottom: 20,
+    paddingVertical: 40,
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
     shadowColor: '#000',
@@ -338,6 +350,7 @@ const styles = StyleSheet.create({
     height: 220,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 20,
   },
   pulseRing: {
     position: 'absolute',
@@ -352,10 +365,17 @@ const styles = StyleSheet.create({
     borderRadius: 60,
     backgroundColor: '#6A8F3F', // mehendi green
   },
+  breathingTextContainer: {
+    minHeight: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+  },
   circleText: {
     fontSize: 24,
     fontWeight: '600',
     color: '#4A5D3F', // Darker green text for contrast
+    textAlign: 'center',
   },
   controlsCard: {
     padding: 20,

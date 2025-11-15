@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Person Identifier</title>
+    <style>
+        body {
+            font-family: Arial;
+            background: #f5f5f5;
+            padding: 40px;
+        }
+        .container {
+            padding: 20px;
+            background: white;
+            max-width: 400px;
+            margin: auto;
+            border-radius: 12px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        input[type=file] {
+            margin: 20px 0;
+        }
+        button {
+            padding: 12px 20px;
+            background: #0066ff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0051cc;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 10px;
+            font-size: 16px;
+            background: #e8f0ff;
+            border-radius: 8px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Identify Person</h2>
+
+    <input id="fileInput" type="file" accept="image/*" />
+
+    <button onclick="uploadImage()">Submit</button>
+
+    <div id="result"></div>
+</div>
+
+<script>
+async function uploadImage() {
+    let fileInput = document.getElementById("fileInput");
+    let resultBox = document.getElementById("result");
+
+    if (!fileInput.files.length) {
+        alert("Select an image first!");
+        return;
+    }
+
+    let formData = new FormData();
+    formData.append("file", fileInput.files[0]);
+
+    resultBox.style.display = "block";
+    resultBox.innerHTML = "Processing...";
+
+    try {
+        let res = await fetch("http://localhost:8000/identify", {
+            method: "POST",
+            body: formData
+        });
+
+        let data = await res.json();
+
+        if (data.status === "match") {
+            resultBox.innerHTML = `
+                <b>Matched!</b><br>
+                <br><img src="${data.matched_url}" width="250">
+                <br><br>Similarity: ${data.similarity.toFixed(3)}
+            `;
+        } else if (data.status === "new_person") {
+            resultBox.innerHTML = "<b>New Person Detected</b>";
+        } else {
+            resultBox.innerHTML = "Error: " + JSON.stringify(data);
+        }
+
+    } catch (err) {
+        resultBox.innerHTML = "Request failed: " + err;
+    }
+}
+</script>
+
+</body>
+</html>

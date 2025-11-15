@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-const API_URL = 'http://172.16.196.91:5000'; 
+const API_URL = 'http://172.16.197.52:5000'; 
 
 interface QuizGameProps {
   onBack: () => void;
@@ -10,7 +10,7 @@ interface QuizGameProps {
   userId?: string;
 }
 
-type Q = { q: string; options: string[]; answer: number };
+type Q = { q: string; options: string[]; answer: number; explanation?: string };
 
 export default function QuizGame({ onBack, journals = [], userId }: QuizGameProps) {
   const [ready, setReady] = useState(false);
@@ -23,6 +23,7 @@ export default function QuizGame({ onBack, journals = [], userId }: QuizGameProp
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [history, setHistory] = useState<{ score: number; total: number; createdAt: string }[]>([]);
+  const [explanation, setExplanation] = useState<string | null>(null);
   const current = questions[idx];
   const finished = questions.length > 0 ? idx >= questions.length : false;
 
@@ -72,6 +73,9 @@ export default function QuizGame({ onBack, journals = [], userId }: QuizGameProp
               q: typeof q.question === 'string' && q.question.trim().length ? q.question : 'Question',
               options: options.length ? options : ['A', 'B', 'C', 'D'],
               answer: answerIdx >= 0 ? answerIdx : 0,
+              explanation: typeof q.explanation === 'string' && q.explanation.trim().length
+                ? q.explanation
+                : (correctText ? `Correct answer: ${correctText}` : undefined),
             };
           })
           .filter((q: Q) => Array.isArray(q.options) && q.options.length > 0);
@@ -142,11 +146,21 @@ export default function QuizGame({ onBack, journals = [], userId }: QuizGameProp
   function pick(i: number) {
     if (selected !== null || finished) return;
     setSelected(i);
-    if (i === current.answer) setScore(s => s + 1);
-    setTimeout(() => {
-      setIdx(i => i + 1);
-      setSelected(null);
-    }, 700);
+    const isCorrect = i === current.answer;
+    if (isCorrect) {
+      setScore(s => s + 1);
+      setTimeout(() => {
+        setIdx(i => i + 1);
+        setSelected(null);
+      }, 700);
+    } else {
+      setExplanation(current.explanation || 'Here is what actually happened.');
+      setTimeout(() => {
+        setExplanation(null);
+        setIdx(i => i + 1);
+        setSelected(null);
+      }, 5000);
+    }
   }
 
   return (
@@ -222,6 +236,14 @@ export default function QuizGame({ onBack, journals = [], userId }: QuizGameProp
           <Text style={{ marginTop: 8, color: '#6B5E4C' }}>
             {saving ? 'Saving…' : saved ? 'Saved' : 'Finalizing…'}
           </Text>
+        </View>
+      )}
+
+      {/* Explanation area (shows after wrong answer) */}
+      {!!explanation && !finished && (
+        <View style={styles.explainCard}>
+          <Ionicons name="information-circle-outline" size={20} color="#6B5E4C" />
+          <Text style={styles.explainText}>{explanation}</Text>
         </View>
       )}
 
@@ -304,6 +326,20 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 1,
   },
+  explainCard: {
+    marginTop: 6,
+    backgroundColor: '#FFF7E6',
+    borderRadius: 12,
+    padding: 12,
+    width: '90%',
+    alignSelf: 'center',
+    borderWidth: 1,
+    borderColor: '#F0D7A5',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  explainText: { color: '#6B5E4C', fontSize: 14, flexShrink: 1 },
   historyTitle: { fontSize: 14, fontWeight: '700', color: '#2C2416', marginBottom: 8 },
   historyEmpty: { color: '#6B5E4C' },
   historyList: { maxHeight: 220 },

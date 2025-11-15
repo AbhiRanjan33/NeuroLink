@@ -41,3 +41,5 @@ yarn-error.*
 /android
 
 venv
+python_env/
+__pycache__

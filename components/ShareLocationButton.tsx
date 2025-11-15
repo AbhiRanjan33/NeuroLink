@@ -4,7 +4,7 @@ import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 
 // UPDATE WITH YOUR NGROK URL
-const API_URL = 'http://172.16.196.91:5000'; 
+const API_URL = 'http://172.16.197.52:5000'; 
 
 interface Props {
   userId: string;
@@ -99,7 +99,7 @@ export default function ShareLocationButton({ userId }: Props) {
           <Ionicons name={isSharing ? 'location' : 'location-outline'} size={20} color="#FFF" />
         )}
         <Text style={{ color: '#FFF', fontSize: 15, fontWeight: '600' }}>
-          {isSharing ? 'Sharing...' : 'Share Location'}
+          {isSharing ? 'Sharing...' : 'Share'}
         </Text>
       </TouchableOpacity>
 

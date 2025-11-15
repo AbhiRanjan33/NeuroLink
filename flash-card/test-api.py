@@ -1,9 +1,10 @@
 import os
 import json
 import re
+import argparse
+import traceback
 from pathlib import Path
 from datetime import datetime
-import argparse
 
 import requests
 from dotenv import load_dotenv
@@ -12,14 +13,16 @@ import requests as http
 
 load_dotenv()
 
-GENERATOR_API = os.getenv("GENERATOR_API_URL", "http://127.0.0.1:5001/generate-memory-quiz")
+# Updated for the new flashcard generator API
+GENERATOR_API = os.getenv("GENERATOR_API_URL", "http://127.0.0.1:5003/generate-flashcards")
 MONGODB_URI = os.getenv("MONGODB_URI")
-MONGODB_DB = os.getenv("MONGODB_DB")  # optional explicit DB name
-USER_ID_ENV = os.getenv("USER_ID")      # preferred explicit userId
-USER_NAME_ENV = os.getenv("USER_NAME")  # or explicit user name (case-insensitive exact)
+MONGODB_DB = os.getenv("MONGODB_DB")      # optional explicit DB name
+USER_ID_ENV = os.getenv("USER_ID")        # preferred explicit userId
+USER_NAME_ENV = os.getenv("USER_NAME")    # or explicit user name (case-insensitive exact)
 BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:5000")
 
 def iso(dt) -> str | None:
+    """Safely convert datetime to ISO string format."""
     if dt is None:
         return None
     if isinstance(dt, str):
@@ -51,7 +54,7 @@ def resolve_user(client: MongoClient) -> dict:
 
     # By explicit userId
     if USER_ID_ENV:
-        doc = users.find_one({"userId": USER_ID_ENV}, {"_id": 0})
+        doc = users.find_one({"userId": USER_ID_ENV}, {"userId": 1, "name": 1, "_id": 0})
         if not doc:
             raise RuntimeError(f"USER_ID={USER_ID_ENV} not found in database.")
         return doc
@@ -94,15 +97,6 @@ def resolve_user(client: MongoClient) -> dict:
     raise RuntimeError("Set USER_ID or USER_NAME (or ensure /current-user works) to select the correct user.")
 
 
-def client_db(client: MongoClient):
-    if MONGODB_DB:
-        return client[MONGODB_DB]
-    try:
-        return client.get_default_database()
-    except Exception:
-        return None
-
-
 def find_backend_url() -> str:
     """
     Resolve the backend URL automatically:
@@ -110,16 +104,12 @@ def find_backend_url() -> str:
       2) http://127.0.0.1:5000 (default)
       3) Parse App.tsx for const API_URL = 'http://...'
     """
-    # 1) env
     if os.getenv("BACKEND_URL"):
         return os.getenv("BACKEND_URL")
 
-    # 2) default
     candidate = "http://127.0.0.1:5000"
-
-    # 3) attempt to parse App.tsx two levels up
     try:
-        repo_root = Path(__file__).resolve().parents[2]  # E:\NeuroLink
+        repo_root = Path(__file__).resolve().parents[2]
         app_tsx = repo_root / "App.tsx"
         if app_tsx.exists():
             text = app_tsx.read_text(encoding="utf-8", errors="ignore")
@@ -132,11 +122,11 @@ def find_backend_url() -> str:
     return candidate
 
 
-def fetch_journals_from_db(user_id: str) -> list[dict]:
+def fetch_user_data_from_db(user_id: str) -> dict:
+    """Fetches journals and relations for a given user."""
     if not MONGODB_URI:
         raise RuntimeError("Set MONGODB_URI in environment.")
     client = MongoClient(MONGODB_URI)
-    # Choose database safely
     db = None
     if MONGODB_DB:
         db = client[MONGODB_DB]
@@ -148,77 +138,116 @@ def fetch_journals_from_db(user_id: str) -> list[dict]:
     if db is None:
         client.close()
         raise RuntimeError("No default database. Set MONGODB_DB or include database in MONGODB_URI.")
+    
     users = db["users"]
-    doc = users.find_one({"userId": user_id}, {"journals": 1, "_id": 0})
+    # Fetch journals, name, and the new 'relations' field
+    doc = users.find_one({"userId": user_id}, {"journals": 1, "relations": 1, "name": 1, "_id": 0})
     client.close()
+    
+    if not doc:
+        return {}
+
+    # Normalize journals for the generator's expected input
     journals = (doc or {}).get("journals", []) or []
-    # Normalize for generator
-    normalized = []
+    normalized_journals = []
     for j in journals:
-        item = {}
-        if j.get("text"):
-            item["text"] = j.get("text")
-        if j.get("caption"):
-            item["caption"] = j.get("caption")
-        item["timestamp"] = iso(j.get("timestamp"))
-        normalized.append(item)
+        item = {
+            "text": j.get("text"),
+            "caption": j.get("caption"),
+            "mediaUrl": j.get("mediaUrl") or j.get("mediaUri"),
+            "timestamp": iso(j.get("timestamp"))
+        }
+        normalized_journals.append(item)
+    
     # Sort ascending by timestamp
-    normalized.sort(key=lambda x: x.get("timestamp") or "")
-    return normalized
+    normalized_journals.sort(key=lambda x: x.get("timestamp") or "")
+    
+    return {
+        "journals": normalized_journals,
+        "relations": doc.get("relations", {}),
+        "name": doc.get("name")
+    }
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--json-only", action="store_true", help="Print only the JSON output (no logs)")
+    args = parser.parse_args()
+    json_only = args.json_only
+
     try:
-        parser = argparse.ArgumentParser()
-        parser.add_argument("--json-only", action="store_true", help="Print only the JSON output (no logs)")
-        args = parser.parse_args()
-
+        if not json_only:
+            print("Flashcard test-api: starting...", flush=True)
         if not MONGODB_URI:
-            raise RuntimeError("Set MONGODB_URI in environment.")
+            raise RuntimeError("Set MONGODB_URI in environment. (flash-card/test-api.py)")
 
-        # Prefer backend-provided current user (mobile app-authenticated). Do NOT guess by last login.
         backend_url = find_backend_url()
+        user_identity = None
         try:
+            if not json_only:
+                print(f"Resolving current user from backend: {backend_url}/current-user", flush=True)
             r = http.get(f"{backend_url}/current-user", timeout=8)
             j = r.json()
-            if not j.get("success") or not j.get("userId"):
-                raise RuntimeError("backend did not report a current user")
-            user_doc = {"userId": j.get("userId"), "name": j.get("name")}
+            if not j.get("success"):
+                raise RuntimeError("backend returned failure")
+            user_identity = {"userId": j.get("userId"), "name": j.get("name")}
         except Exception:
-            # Only allow explicit override via env to avoid choosing the wrong user
-            if USER_ID_ENV or USER_NAME_ENV:
-                client = MongoClient(MONGODB_URI)
-                user_doc = resolve_user(client)
-                client.close()
-            else:
-                raise RuntimeError("No current user from backend. Please open the mobile app and authenticate, or set USER_ID/USER_NAME in env.")
+            if not json_only:
+                print("Backend current-user failed, falling back to DB resolution...", flush=True)
+            client = MongoClient(MONGODB_URI)
+            user_identity = resolve_user(client)
+            client.close()
 
-        user_id = user_doc.get("userId")
-        user_name = user_doc.get("name")
+        user_id = user_identity.get("userId")
+        user_name_id = user_identity.get("name")
+        if not json_only:
+            print(f"Using userId={user_id} name='{user_name_id}'", flush=True)
+        
+        # Fetch all necessary data: journals, relations, and name
+        user_data = fetch_user_data_from_db(user_id)
+        
+        journals = user_data.get("journals")
+        relations = user_data.get("relations")
+        user_name = user_data.get("name")
 
-        journals = fetch_journals_from_db(user_id)
         if not journals:
-            print("No journals found for user:", user_id)
+            if not json_only:
+                print(f"No journals found for user: {user_id}", flush=True)
+            print(json.dumps({"flashcards": []}))
             return
 
-        payload = {"journals": journals, "userName": user_name}
-        if not args.json_only:
-            print(f"➡ Sending POST to generator for userId={user_id} name={user_name} with {len(journals)} journals...")
+        # Construct the payload for the flashcard generator
+        payload = {
+            "journals": journals,
+            "userName": user_name,
+            "relations": relations
+        }
+
+        if not json_only:
+            print(f"➡ Sending POST to flashcard generator for userId={user_id} name='{user_name}' with {len(journals)} journals...")
+        
         resp = requests.post(GENERATOR_API, json=payload, timeout=120)
-        if not args.json_only:
+        
+        if not json_only:
             print("⬅ STATUS:", resp.status_code)
+        
         try:
             data = resp.json()
-            if args.json_only:
+            if json_only:
                 print(json.dumps(data))
             else:
                 print(json.dumps(data, indent=2))
         except Exception:
-            if args.json_only:
-                print(json.dumps({"error": "non-json", "raw": resp.text[:1000]}))
+            if json_only:
+                print(json.dumps({"error": "non-json response", "raw": resp.text[:1000]}))
             else:
-                print("Raw response:\n", resp.text[:1000])
+                print("Raw response (not valid JSON):\n", resp.text[:1000])
+
     except Exception as e:
-        print("❌ ERROR:", e)
+        if json_only:
+            print(json.dumps({"error": str(e)}))
+        else:
+            print(f"❌ ERROR: {e}", flush=True)
+            traceback.print_exc()
 
 if __name__ == "__main__":
     main()
